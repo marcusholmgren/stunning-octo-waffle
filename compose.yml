@@ -1,0 +1,25 @@
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest  # Use a specific version for production
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin_password  # Change this in production!
+      KC_DB: dev-file # Use PostgreSQL/MySQL/MariaDB in production, along with volumes.
+      KC_HTTP_PORT: 8080
+      KC_HOSTNAME_STRICT: "false" # Set to true in a production, reverse-proxy setup.
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./keycloak-realm-config:/opt/keycloak/data/import  # Mount the import directory
+    command:
+       - start-dev
+       - --import-realm  # Import the realm on startup
+
+  react-app:
+    build:
+      context: ./sow-app  # Path to your React application's directory
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"  # Expose the React app's port
+    depends_on:
+      - keycloak
