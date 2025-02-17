@@ -13,6 +13,20 @@ RUN npm install # --production # Use --production for smaller image size
 # Copy the rest of your application's code
 COPY . .
 
+# Define build arguments (with optional default values)
+ARG VITE_KEYCLOAK_URL
+ARG VITE_KEYCLOAK_REALM
+ARG VITE_KEYCLOAK_CLIENT_ID
+ARG VITE_KEYCLOAK_REDIRECT_URI
+ARG VITE_BACKEND_URL
+
+# Set environment variables for the build process, using the build arguments
+ENV VITE_KEYCLOAK_URL=$VITE_KEYCLOAK_URL
+ENV VITE_KEYCLOAK_REALM=$VITE_KEYCLOAK_REALM
+ENV VITE_KEYCLOAK_CLIENT_ID=$VITE_KEYCLOAK_CLIENT_ID
+ENV VITE_KEYCLOAK_REDIRECT_URI=$VITE_KEYCLOAK_REDIRECT_URI
+ENV VITE_BACKEND_URL=$VITE_BACKEND_URL
+
 # Build the React app
 RUN npm run build
 

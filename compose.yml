@@ -15,11 +15,17 @@ services:
        - start-dev
        - --import-realm  # Import the realm on startup
 
-  react-app:
+  sow-app:
     build:
-      context: ./sow-app  # Path to your React application's directory
+      context: ./sow-app
       dockerfile: Dockerfile
+      args:
+        - VITE_KEYCLOAK_URL=http://localhost:8080
+        - VITE_KEYCLOAK_REALM=sow
+        - VITE_KEYCLOAK_CLIENT_ID=sow-app-client
+        - VITE_KEYCLOAK_REDIRECT_URI=http://localhost:3000/
+        - VITE_BACKEND_URL=http://localhost:8001
     ports:
-      - "3000:80"  # Expose the React app's port
+      - "3000:80"
     depends_on:
       - keycloak

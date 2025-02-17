@@ -6,6 +6,7 @@ function App() {
     const [authenticated, setAuthenticated] = useState(false);
 
     useEffect(() => {
+        console.log('Environment variables:', import.meta.env);
         const keycloakInstance = new Keycloak({
             url: import.meta.env.VITE_KEYCLOAK_URL,
             realm: import.meta.env.VITE_KEYCLOAK_REALM,
