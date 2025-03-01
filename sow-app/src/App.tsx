@@ -1,90 +1,155 @@
-import {useState, useEffect} from 'react';
-import Keycloak from 'keycloak-js';
+import {useState} from 'react';
+import {useAuth} from "react-oidc-context";
+import {Textarea} from './components/textarea';
+import {Input} from './components/input'
+import {Field, Label} from './components/fieldset'
+import {Button} from './components/button';
+import {Heading} from "./components/heading.tsx";
+
+type Review = {
+    restaurant: string;
+    review: string;
+}
 
 function App() {
-    const [keycloak, setKeycloak] = useState<Keycloak | null>(null);
-    const [authenticated, setAuthenticated] = useState(false);
+    const auth = useAuth();
+    const [review, setReview] = useState<Review>({restaurant: '', review: ''});
 
-    useEffect(() => {
-        console.log('Environment variables:', import.meta.env);
-        const keycloakInstance = new Keycloak({
-            url: import.meta.env.VITE_KEYCLOAK_URL,
-            realm: import.meta.env.VITE_KEYCLOAK_REALM,
-            clientId: import.meta.env.VITE_KEYCLOAK_CLIENT_ID,
-        });
+    switch (auth.activeNavigator) {
+        case "signinSilent":
+            return <div>Signing you in...</div>;
+        case "signoutRedirect":
+            return <div>Signing you out...</div>;
+    }
 
-        keycloakInstance.init({onLoad: 'login-required'}) // 'login-required' or 'check-sso'
-            .then(authenticated => {
-                setKeycloak(keycloakInstance);
-                setAuthenticated(authenticated);
 
-                if (authenticated) {
-                    console.log('User is authenticated');
-                    // You can access the user's token: keycloakInstance.token
-                    console.log(keycloakInstance.token);
-                } else {
-                    console.log('User is not authenticated');
-                }
-            })
-            .catch(err => {
-                console.error("Keycloak initialization failed:", err);
-            });
-    }, []);
+    if (auth.error) {
+        return <div>Oops... {auth.error.message}</div>;
+    }
 
     const handleLogin = () => {
-        keycloak?.login();
+        auth.signinRedirect();
     }
 
     const handleLogout = () => {
-        keycloak?.logout();
+        auth.signoutRedirect();
     }
 
-    if (!keycloak) {
-        return <div
-            className="flex justify-center items-center h-screen pt-20 text-xl font-bold underline">Loading...</div>;
+    // @ts-ignore
+    const handleSubmit = async (event) => {
+        event.preventDefault();
+
+        if (!auth.isAuthenticated) {
+            console.error("Not authenticated or no token available.");
+            return;
+        }
+
+        try {
+            const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/waffle/reviews`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${auth.user?.access_token}`
+                },
+                body: JSON.stringify(review)
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            console.log("Review submitted successfully:", data);
+            alert("Review submitted! Response: " + JSON.stringify(data));
+            setReview({restaurant: '', review: ''});
+        } catch (error) {
+            console.error("Error submitting review:", error);
+            alert("Error submitting review: " + error);
+        }
+    };
+
+    // @ts-ignore
+    const handleChange = (event) => {
+        const {name, value} = event.target;
+        setReview(prevReview => ({...prevReview, [name]: value}));
+    };
+
+    if (auth.isLoading) {
+        return <div className="p-5 h-screen"><Heading>Loading...</Heading></div>;
     }
+
 
     return (
-        <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
-            <h1>Stunning Octo Waffel 🧇</h1>
-            {authenticated ? (
+        <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 h-screen">
+            <Heading>Stunning Octo Waffel 🧇</Heading>
+            {auth.isAuthenticated ? (
                 <div>
-                    <p className="text-sm/6 text-gray-500">User is authenticated!</p>
-                    <button
+                    <p className="text-sm/6 text-gray-500">User {auth.user?.profile.name} is authenticated!</p>
+                    <ReviewForm review={review} handleSubmit={handleSubmit} handleChange={handleChange}/>
+                    <Button
                         type="button"
-                        className="rounded-md bg-indigo-600 px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                        color="indigo"
                         onClick={handleLogout}>Logout
-                    </button>
-                    <div
-                        className="overflow-hidden rounded-lg pb-12 outline outline-1 -outline-offset-1 outline-gray-300 focus-within:outline focus-within:outline-2 focus-within:-outline-offset-2 focus-within:outline-indigo-600">
-                        <label htmlFor="token" className="sr-only">
+                    </Button>
+                    <Field>
+                        <Label htmlFor="token" className="sr-only">
                             Token
-                        </label>
-                        <textarea
+                        </Label>
+                        <Textarea
                             id="token"
                             name="token"
-                            rows={5}
+                            rows={14}
                             readOnly={true}
-                            className="block w-full resize-none bg-transparent px-3 py-1.5 text-base text-gray-900 placeholder:text-gray-400 focus:outline focus:outline-0 sm:text-sm/6"
-                            defaultValue={keycloak.token}
+                            defaultValue={auth.user?.access_token}
                         />
-                    </div>
+                    </Field>
                 </div>
             ) : (
                 <div>
                     <p className="text-sm/6 text-gray-500">User is not authenticated.</p>
-                    <button
-                        type="button"
-                        className="rounded-md bg-indigo-600 px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-                        onClick={handleLogin}
-                    >
+                    <Button
+                        type="button" color="indigo"
+                        onClick={handleLogin}>
                         Login
-                    </button>
+                    </Button>
                 </div>
 
             )}
         </div>
     );
+}
+
+interface ReviewFormProps {
+    review: Review;
+    handleSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
+    handleChange: (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
+}
+
+function ReviewForm({review, handleSubmit, handleChange}: ReviewFormProps) {
+    return (
+        <form onSubmit={handleSubmit}>
+            <Field>
+                <Label>
+                    Restaurant:
+                    <Input type="text" name="restaurant" value={review.restaurant} onChange={handleChange} required/>
+                </Label>
+            </Field>
+            <br/>
+            <Field>
+                <Label>
+                    Review:
+                    <Textarea name="review" value={review.review} onChange={handleChange} required/>
+                </Label>
+            </Field>
+            <br/>
+            <div className="flex justify-end gap-4">
+                <Button type="reset" plain>
+                    Reset
+                </Button>
+                <Button type="submit">Save changes</Button>
+            </div>
+        </form>
+    )
 }
 
 export default App;

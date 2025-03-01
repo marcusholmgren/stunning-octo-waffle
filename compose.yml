@@ -24,8 +24,22 @@ services:
         - VITE_KEYCLOAK_REALM=sow
         - VITE_KEYCLOAK_CLIENT_ID=sow-app-client
         - VITE_KEYCLOAK_REDIRECT_URI=http://localhost:3000/
-        - VITE_BACKEND_URL=http://localhost:8001
+        - VITE_BACKEND_URL=http://localhost:8000
     ports:
       - "3000:80"
+    depends_on:
+      - keycloak
+
+  sow-api:
+    build:
+      context: ./sow-api
+      dockerfile: Dockerfile
+    ports:
+      - "8000:80"
+    environment:
+      - KEYCLOAK_URL=http://keycloak:8080  # URL to Keycloak
+      - KEYCLOAK_REALM=sow
+      - KEYCLOAK_CLIENT_ID=sow-api-client
+      - KEYCLOAK_CLIENT_SECRET=your-backend-client-secret # Secret for backend client
     depends_on:
       - keycloak
