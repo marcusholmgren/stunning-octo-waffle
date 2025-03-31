@@ -37,9 +37,7 @@ services:
     ports:
       - "8000:80"
     environment:
-      - KEYCLOAK_URL=http://keycloak:8080  # URL to Keycloak
-      - KEYCLOAK_REALM=sow
-      - KEYCLOAK_CLIENT_ID=sow-api-client
-      - KEYCLOAK_CLIENT_SECRET=your-backend-client-secret # Secret for backend client
+      - IDP_URL=http://keycloak:8080/realms/sow  # URL to Keycloak
+      - IDP_AUDIENCE=sow-api-client
     depends_on:
       - keycloak
