@@ -51,7 +51,7 @@
       "name": "SOW API Client",
       "enabled": true,
       "clientAuthenticatorType": "client-secret",
-      "secret": "your-backend-client-secret",
+      "secret_configuration_note": "The client secret for sow-api-client should be set via environment variables or a secure vault, not hardcoded here. This client is confidential and may require a secret if it uses flows like client credentials.",
       "protocol": "openid-connect",
       "publicClient": false,
       "standardFlowEnabled": false,

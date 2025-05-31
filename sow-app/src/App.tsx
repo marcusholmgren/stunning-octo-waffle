@@ -14,6 +14,7 @@ type Review = {
 function App() {
     const auth = useAuth();
     const [review, setReview] = useState<Review>({restaurant: '', review: ''});
+    const [copyButtonText, setCopyButtonText] = useState("Copy Token");
 
     switch (auth.activeNavigator) {
         case "signinSilent":
@@ -34,6 +35,24 @@ function App() {
     const handleLogout = () => {
         auth.signoutRedirect();
     }
+
+    const handleCopyToken = async () => {
+        if (auth.user?.access_token) {
+            try {
+                await navigator.clipboard.writeText(auth.user.access_token);
+                setCopyButtonText("Copied!");
+                setTimeout(() => {
+                    setCopyButtonText("Copy Token");
+                }, 2000);
+            } catch (err) {
+                console.error("Failed to copy token: ", err);
+                setCopyButtonText("Failed to copy");
+                setTimeout(() => {
+                    setCopyButtonText("Copy Token");
+                }, 2000);
+            }
+        }
+    };
 
     // @ts-ignore
     const handleSubmit = async (event) => {
@@ -102,6 +121,14 @@ function App() {
                             readOnly={true}
                             defaultValue={auth.user?.access_token}
                         />
+                        <Button
+                            type="button"
+                            color="indigo"
+                            onClick={handleCopyToken}
+                            className="mt-2"
+                        >
+                            {copyButtonText}
+                        </Button>
                     </Field>
                 </div>
             ) : (
