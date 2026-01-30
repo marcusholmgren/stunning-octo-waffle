@@ -1,3 +1,40 @@
+# Stunning Octo Waffle Frontend
+
+A React + TypeScript + Vite application for the SOW project.
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js (v18+)
+- npm
+
+### Running Locally
+
+1.  Install dependencies:
+    ```bash
+    npm install
+    ```
+
+2.  Environment Variables:
+    Create a `.env` file in the root of `sow-app` (or use `.env.local`) with the following variables:
+
+    ```env
+    VITE_KEYCLOAK_URL=http://localhost:8080
+    VITE_KEYCLOAK_REALM=sow
+    VITE_KEYCLOAK_CLIENT_ID=sow-app-client
+    VITE_BACKEND_URL=http://localhost:8000
+    ```
+
+3.  Run the development server:
+    ```bash
+    npm run dev
+    ```
+
+    The application will be available at `http://localhost:5173` (or whatever port Vite selects).
+
+---
+
 # React + TypeScript + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
