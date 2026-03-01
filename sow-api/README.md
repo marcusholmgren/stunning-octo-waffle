@@ -12,7 +12,7 @@ To run the API locally, you need Python installed (refer to `pyproject.toml` or 
 
 1.  Install dependencies:
     ```bash
-    pip install "fastapi[standard]" "python-jose[cryptography]" httpx
+    uv sync
     ```
     Or if you are using a package manager that supports `pyproject.toml` (like `uv` or `poetry`), use that.
 
@@ -27,8 +27,7 @@ To run the API locally, you need Python installed (refer to `pyproject.toml` or 
 
 3.  Run the application:
     ```bash
-    export IDP_URL=http://localhost:8080/realms/sow
-    uvicorn app.main:app --reload
+    IDP_URL=http://localhost:8080/realms/sow uv run fastapi dev
     ```
     (Adjust `IDP_URL` if your Keycloak is running elsewhere).
 
@@ -37,6 +36,5 @@ To run the tests, use the following command:
 
 ```bash
 # Set a dummy IDP_URL for tests
-export IDP_URL=http://mock-idp
-pytest
+IDP_URL=http://localhost:8080 uv run pytest tests/test_api.py
 ```

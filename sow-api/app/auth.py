@@ -127,7 +127,6 @@ async def get_public_key(kid: str):
          log.error("Invalid JWKS structure received.")
          raise HTTPException(status_code=500, detail="Invalid JWKS received from provider.")
 
-    key_found = False
     for key_dict in jwks['keys']:
         if key_dict.get('kid') == kid:
             # Optional checks (already present in previous version)
@@ -143,15 +142,13 @@ async def get_public_key(kid: str):
                 async with _public_key_cache_lock:
                     _public_key_cache[kid] = (public_key_pem, now)
                 log.debug(f"Constructed and cached public key for kid: {kid}")
-                key_found = True
                 return public_key_pem
             except JWSError as e:
                 log.error(f"Failed to construct public key for kid {kid}: {e}")
                 raise HTTPException(status_code=500, detail=f"Could not construct public key for kid: {kid}")
 
-    if not key_found:
-        log.warning(f"No matching public key found for kid: {kid} in current JWKS.")
-        raise HTTPException(status_code=401, detail=f"Public key for token signature not found (kid: {kid})")
+    log.warning(f"No matching public key found for kid: {kid} in current JWKS.")
+    raise HTTPException(status_code=401, detail=f"Public key for token signature not found (kid: {kid})")
 
 
 async def decode_token(token: str) -> dict:
