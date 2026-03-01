@@ -1,6 +1,7 @@
 import os
 import logging
 import time
+import asyncio
 import httpx
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -27,37 +28,51 @@ _well_known_config_cache = {"data": None, "timestamp": 0.0}
 _jwks_cache = {"data": None, "timestamp": 0.0, "jwks_uri": None}
 _public_key_cache = {} # Simple dict cache for public keys {kid: (key_pem, timestamp)}
 
-# --- Async HTTP Client ---
-# Use a single client instance for connection pooling
-http_client = httpx.AsyncClient(timeout=10)
+# --- Locks for thread-safe cache access ---
+_well_known_config_lock = asyncio.Lock()
+_jwks_cache_lock = asyncio.Lock()
+_public_key_cache_lock = asyncio.Lock()
 
-async def close_auth_client():
-    await http_client.aclose()
-    log.info("HTTPX client closed.")
+# --- Async HTTP Client ---
+# Initialized in the lifespan context manager, tied to the running event loop
+http_client: httpx.AsyncClient | None = None
+
+def set_http_client(client: httpx.AsyncClient) -> None:
+    """Sets the HTTP client instance. Called during application startup."""
+    global http_client
+    http_client = client
+    log.info("HTTP client initialized.")
+
+def get_http_client() -> httpx.AsyncClient:
+    """Returns the HTTP client instance. Raises if not yet initialized."""
+    if http_client is None:
+        raise RuntimeError("HTTP client not initialized. Check application startup.")
+    return http_client
 
 async def get_well_known_config():
     """Fetches the OIDC well-known configuration asynchronously, with caching."""
-    now = time.time()
-    if now - _well_known_config_cache["timestamp"] < CACHE_TTL_SECONDS and _well_known_config_cache["data"]:
-        return _well_known_config_cache["data"]
-
-    try:
-        response = await http_client.get(WELL_KNOWN_URL)
-        response.raise_for_status()
-        config = response.json()
-        _well_known_config_cache["data"] = config
-        _well_known_config_cache["timestamp"] = now
-        log.info("Fetched and cached well-known configuration.")
-        return config
-    except httpx.RequestError as e:
-        log.error(f"Failed to fetch well-known configuration via httpx: {e}")
-        if _well_known_config_cache["data"]:
-            log.warning("Returning stale well-known configuration due to fetch error.")
+    async with _well_known_config_lock:
+        now = time.time()
+        if now - _well_known_config_cache["timestamp"] < CACHE_TTL_SECONDS and _well_known_config_cache["data"]:
             return _well_known_config_cache["data"]
-        raise HTTPException(status_code=503, detail="Could not retrieve OIDC configuration.")
-    except Exception as e: # Catch potential JSON decode errors or other issues
-        log.error(f"Error processing well-known configuration response: {e}")
-        raise HTTPException(status_code=500, detail="Error processing OIDC configuration response.")
+
+        try:
+            response = await get_http_client().get(WELL_KNOWN_URL)
+            response.raise_for_status()
+            config = response.json()
+            _well_known_config_cache["data"] = config
+            _well_known_config_cache["timestamp"] = now
+            log.info("Fetched and cached well-known configuration.")
+            return config
+        except httpx.RequestError as e:
+            log.error(f"Failed to fetch well-known configuration via httpx: {e}")
+            if _well_known_config_cache["data"]:
+                log.warning("Returning stale well-known configuration due to fetch error.")
+                return _well_known_config_cache["data"]
+            raise HTTPException(status_code=503, detail="Could not retrieve OIDC configuration.")
+        except Exception as e: # Catch potential JSON decode errors or other issues
+            log.error(f"Error processing well-known configuration response: {e}")
+            raise HTTPException(status_code=500, detail="Error processing OIDC configuration response.")
 
 
 async def get_jwks():
@@ -68,42 +83,44 @@ async def get_jwks():
         log.error("JWKS URI not found in well-known config.")
         raise HTTPException(status_code=500, detail="JWKS URI not configured.")
 
-    now = time.time()
-    if (now - _jwks_cache["timestamp"] < CACHE_TTL_SECONDS and
-            _jwks_cache["data"] and
-            _jwks_cache["jwks_uri"] == jwks_uri):
-        return _jwks_cache["data"]
+    async with _jwks_cache_lock:
+        now = time.time()
+        if (now - _jwks_cache["timestamp"] < CACHE_TTL_SECONDS and
+                _jwks_cache["data"] and
+                _jwks_cache["jwks_uri"] == jwks_uri):
+            return _jwks_cache["data"]
 
-    try:
-        response = await http_client.get(jwks_uri)
-        response.raise_for_status()
-        jwks = response.json()
-        _jwks_cache["data"] = jwks
-        _jwks_cache["timestamp"] = now
-        _jwks_cache["jwks_uri"] = jwks_uri
-        log.info("Fetched and cached JWKS.")
-        # Clear the public key cache when JWKS is refreshed
-        _public_key_cache.clear()
-        log.info("Public key cache cleared due to JWKS refresh.")
-        return jwks
-    except httpx.RequestError as e:
-        log.error(f"Failed to fetch JWKS via httpx: {e}")
-        if _jwks_cache["data"] and _jwks_cache["jwks_uri"] == jwks_uri:
-             log.warning("Returning stale JWKS due to fetch error.")
-             return _jwks_cache["data"]
-        raise HTTPException(status_code=503, detail="Could not retrieve JWKS.")
-    except Exception as e: # Catch potential JSON decode errors or other issues
-        log.error(f"Error processing JWKS response: {e}")
-        raise HTTPException(status_code=500, detail="Error processing JWKS response.")
+        try:
+            response = await get_http_client().get(jwks_uri)
+            response.raise_for_status()
+            jwks = response.json()
+            _jwks_cache["data"] = jwks
+            _jwks_cache["timestamp"] = now
+            _jwks_cache["jwks_uri"] = jwks_uri
+            log.info("Fetched and cached JWKS.")
+            # Clear the public key cache when JWKS is refreshed
+            _public_key_cache.clear()
+            log.info("Public key cache cleared due to JWKS refresh.")
+            return jwks
+        except httpx.RequestError as e:
+            log.error(f"Failed to fetch JWKS via httpx: {e}")
+            if _jwks_cache["data"] and _jwks_cache["jwks_uri"] == jwks_uri:
+                 log.warning("Returning stale JWKS due to fetch error.")
+                 return _jwks_cache["data"]
+            raise HTTPException(status_code=503, detail="Could not retrieve JWKS.")
+        except Exception as e: # Catch potential JSON decode errors or other issues
+            log.error(f"Error processing JWKS response: {e}")
+            raise HTTPException(status_code=500, detail="Error processing JWKS response.")
 
 
 async def get_public_key(kid: str):
     """Finds the appropriate public key asynchronously, with caching."""
-    now = time.time()
-    # Check cache first
-    cached_key = _public_key_cache.get(kid)
-    if cached_key and now - cached_key[1] < CACHE_TTL_SECONDS:
-        return cached_key[0] # Return cached PEM
+    async with _public_key_cache_lock:
+        now = time.time()
+        # Check cache first
+        cached_key = _public_key_cache.get(kid)
+        if cached_key and now - cached_key[1] < CACHE_TTL_SECONDS:
+            return cached_key[0] # Return cached PEM
 
     jwks = await get_jwks() # Await the async call
     if not jwks or 'keys' not in jwks:
@@ -123,7 +140,8 @@ async def get_public_key(kid: str):
                 public_key = jwk.construct(key_dict)
                 public_key_pem = public_key.to_pem().decode('utf-8')
                 # Cache the constructed key
-                _public_key_cache[kid] = (public_key_pem, now)
+                async with _public_key_cache_lock:
+                    _public_key_cache[kid] = (public_key_pem, now)
                 log.debug(f"Constructed and cached public key for kid: {kid}")
                 key_found = True
                 return public_key_pem

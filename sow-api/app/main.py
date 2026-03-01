@@ -1,20 +1,28 @@
 import os
 import logging
+import httpx
 from fastapi import FastAPI, Depends
 from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 from .models import WaffleReview
-from .auth import get_current_user, close_auth_client
+from .auth import get_current_user, set_http_client
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)-15s %(message)s")
 log = logging.getLogger(__name__)
 
-# --- Async HTTP Client Cleanup ---
+# --- Async HTTP Client Lifecycle ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Startup: Create and initialize the HTTP client
+    client = httpx.AsyncClient(timeout=10)
+    set_http_client(client)
+    log.info("HTTP client created and initialized.")
+
     yield
-    # Ensure the client is closed gracefully on application shutdown
-    await close_auth_client()
+
+    # Shutdown: Close the HTTP client gracefully
+    await client.aclose()
+    log.info("HTTP client closed.")
 
 app = FastAPI(lifespan=lifespan)
 
