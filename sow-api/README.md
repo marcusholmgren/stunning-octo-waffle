@@ -35,6 +35,5 @@ To run the API locally, you need Python installed (refer to `pyproject.toml` or 
 To run the tests, use the following command:
 
 ```bash
-# Set a dummy IDP_URL for tests
-IDP_URL=http://localhost:8080 uv run pytest tests/test_api.py
+uv run pytest
 ```

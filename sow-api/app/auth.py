@@ -12,14 +12,22 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)-15s %(message)s")
 log = logging.getLogger(__name__)
 
 # --- Configuration ---
-IDP_URL = os.environ.get("IDP_URL")
-IDP_AUDIENCE = os.environ.get("IDP_AUDIENCE", "your-default-audience")
+def get_idp_url() -> str:
+    """Returns the IDP URL, raising an error if it's missing."""
+    url = os.environ.get("IDP_URL")
+    if not url:
+        log.error("IDP_URL environment variable must be set.")
+        raise RuntimeError("Missing IDP_URL configuration.")
+    return url
 
-if not IDP_URL:
-    log.error("IDP_URL environment variable must be set.")
-    raise RuntimeError("Missing IDP_URL configuration.")
+def get_well_known_url() -> str:
+    """Returns the OIDC well-known configuration URL."""
+    return f"{get_idp_url().rstrip('/')}/.well-known/openid-configuration"
 
-WELL_KNOWN_URL = f"{IDP_URL.rstrip('/')}/.well-known/openid-configuration"
+def get_idp_audience() -> str:
+    """Returns the IDP audience."""
+    return os.environ.get("IDP_AUDIENCE", "your-default-audience")
+
 ALLOWED_ALGORITHMS = ["RS256"]
 
 # --- Caching for Well-Known Config and JWKS ---
@@ -57,7 +65,8 @@ async def get_well_known_config():
             return _well_known_config_cache["data"]
 
         try:
-            response = await get_http_client().get(WELL_KNOWN_URL)
+            url = get_well_known_url()
+            response = await get_http_client().get(url)
             response.raise_for_status()
             config = response.json()
             _well_known_config_cache["data"] = config
@@ -190,7 +199,7 @@ async def decode_token(token: str) -> dict:
             token,
             public_key_pem,
             algorithms=[alg],
-            audience=IDP_AUDIENCE,
+            audience=get_idp_audience(),
             issuer=issuer,
             options=options
         )
