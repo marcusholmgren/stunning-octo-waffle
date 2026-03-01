@@ -172,6 +172,13 @@ async def decode_token(token: str) -> dict:
              log.error(f"Token algorithm '{alg}' not in allowed list: {ALLOWED_ALGORITHMS}")
              raise HTTPException(status_code=401, detail=f"Invalid token algorithm: {alg}")
 
+        # Fetch well-known config to get issuer
+        well_known = await get_well_known_config()
+        issuer = well_known.get("issuer")
+        if not issuer:
+            log.error("Issuer not found in well-known config.")
+            raise HTTPException(status_code=500, detail="Issuer not configured.")
+
         # Await the async public key retrieval
         public_key_pem = await get_public_key(kid)
 
@@ -187,6 +194,7 @@ async def decode_token(token: str) -> dict:
             public_key_pem,
             algorithms=[alg],
             audience=IDP_AUDIENCE,
+            issuer=issuer,
             options=options
         )
         log.info(f"Token successfully decoded for user: {decoded_token.get('preferred_username', 'N/A')}")
